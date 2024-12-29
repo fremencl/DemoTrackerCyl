@@ -2,6 +2,9 @@ import streamlit as st
 from PIL import Image
 from pathlib import Path
 
+# 1) IMPORTAR LA FUNCIÓN DE AUTH
+from auth import check_password
+
 def get_project_root() -> Path:
     """Returns the project root folder."""
     return Path(__file__).parent
@@ -18,6 +21,10 @@ st.set_page_config(
     page_icon=":dollar:",
     initial_sidebar_state="expanded",
 )
+
+# 2) CHECK PASSWORD (SE DETIENE SI FALLA)
+if not check_password():
+    st.stop()
 
 # Crear tres columnas y mostrar la imagen en la columna central
 col1, col2, col3 = st.columns([1, 2, 1])
