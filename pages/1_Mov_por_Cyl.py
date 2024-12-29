@@ -3,6 +3,13 @@ import gspread
 from google.oauth2 import service_account
 import pandas as pd
 
+# 1) Importamos la función de autenticación
+from auth import check_password
+
+# Primero verificamos la contraseña.
+if not check_password():
+    st.stop()
+
 # Funciones para obtener datos de Google Sheets
 @st.cache_data
 def get_gsheet_data(sheet_name):
@@ -11,10 +18,16 @@ def get_gsheet_data(sheet_name):
         creds_dict = st.secrets["gcp_service_account"]
         
         # Definir los scopes necesarios
-        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets", 
+            "https://www.googleapis.com/auth/drive"
+        ]
 
         # Crear las credenciales con los scopes especificados
-        credentials = service_account.Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        credentials = service_account.Credentials.from_service_account_info(
+            creds_dict, 
+            scopes=scopes
+        )
         
         # Conectar con gspread usando las credenciales
         client = gspread.authorize(credentials)
@@ -59,3 +72,4 @@ if st.button("Buscar"):
             st.warning("No se encontraron movimientos para el cilindro ingresado.")
     else:
         st.warning("Por favor, ingrese una ID de cilindro.")
+
