@@ -3,6 +3,13 @@ import gspread
 from google.oauth2 import service_account
 import pandas as pd
 
+# 1) Importamos la función de autenticación
+from auth import check_password
+
+# Primero verificamos la contraseña.
+if not check_password():
+    st.stop()
+
 # Funciones para obtener datos de Google Sheets
 @st.cache_data
 def get_gsheet_data(sheet_name):
