@@ -53,29 +53,31 @@ df_detalle = get_gsheet_data("DETALLE")
 st.title("Demo TrackerCyl")
 
 # Subtítulo de la aplicación
-st.subheader("CILINDROS CON ÚLTIMO MOVIMIENTO DE DESPACHO O ENTREGA")
+st.subheader("CILINDROS NO RETORNADOS")
 
-# Asegurar que IDPROC es numérico
-df_detalle["IDPROC"] = pd.to_numeric(df_detalle["IDPROC"], errors="coerce")
-df_detalle = df_detalle.dropna(subset=["IDPROC"])
+# Asegurar que IDPROC sea tratado como string
+df_detalle["IDPROC"] = df_detalle["IDPROC"].astype(str)
 
-# Convertir IDPROC a entero para garantizar consistencia
-df_detalle["IDPROC"] = df_detalle["IDPROC"].astype(int)
+# Cruzar con la pestaña PROCESO
+df_movimientos = df_detalle.merge(df_proceso, on="IDPROC", how="left")
 
-# Obtener el último movimiento de cada cilindro
-df_ultimo_movimiento = df_detalle.sort_values(by=["IDPROC"], ascending=False).drop_duplicates(subset="SERIE", keep="first")
+# Filtrar cilindros "Entregados" y "Retornados"
+df_entregados = df_movimientos[df_movimientos["PROCESO"].isin(["DESPACHO", "ENTREGA"])]
+df_retorno = df_movimientos[df_movimientos["PROCESO"].isin(["RETIRO", "RECEPCION"])]
 
-# Cruzar con la pestaña PROCESO para verificar el tipo de movimiento
-df_ultimo_movimiento = df_ultimo_movimiento.merge(df_proceso, on="IDPROC", how="left")
+# Identificar cilindros no retornados
+cilindros_entregados = set(df_entregados["SERIE"])
+cilindros_retorno = set(df_retorno["SERIE"])
+cilindros_no_retorno = cilindros_entregados - cilindros_retorno
 
-# Filtrar cilindros con último proceso de "ENTREGA" o "DESPACHO"
-df_entrega_despacho = df_ultimo_movimiento[df_ultimo_movimiento["PROCESO"].isin(["DESPACHO", "ENTREGA"])]
+# Filtrar los datos finales
+df_no_retorno = df_entregados[df_entregados["SERIE"].isin(cilindros_no_retorno)]
 
 # Verificar si hay datos para mostrar
-if not df_entrega_despacho.empty:
+if not df_no_retorno.empty:
     # Mostrar los resultados
-    st.write("Cilindros con último movimiento de DESPACHO o ENTREGA:")
-    st.dataframe(df_entrega_despacho[["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE"]])
+    st.write("Cilindros que han sido entregados pero no retornados:")
+    st.dataframe(df_no_retorno[["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE"]])
 
     # Botón para descargar el listado en Excel
     @st.cache_data
@@ -84,9 +86,9 @@ if not df_entrega_despacho.empty:
 
     st.download_button(
         label="Descargar listado en Excel",
-        data=convert_to_excel(df_entrega_despacho),
-        file_name="Cilindros_Entrega_Despacho.csv",
+        data=convert_to_excel(df_no_retorno),
+        file_name="Cilindros_No_Retornados.csv",
         mime="text/csv",
     )
 else:
-    st.warning("No se encontraron cilindros con último movimiento de DESPACHO o ENTREGA.")
+    st.warning("No se encontraron cilindros no retornados.")
