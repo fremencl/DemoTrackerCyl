@@ -53,32 +53,28 @@ df_detalle = get_gsheet_data("DETALLE")
 st.title("Demo TrackerCyl")
 
 # Subtítulo de la aplicación
-st.subheader("CILINDROS FUERA DE ROTACIÓN (> 30 DÍAS)")
+st.subheader("CILINDROS NO RETORNADOS (> 30 DÍAS)")
 
 # Calcular fecha límite
 fecha_limite = datetime.now() - timedelta(days=30)
 
-# Filtrar cilindros entregados y no retornados
-df_entregas = df_proceso[df_proceso["PROCESO"].isin(["DESPACHO", "ENTREGA"])]
+# Obtener el último movimiento de cada cilindro
+df_ultimo_movimiento = df_detalle.sort_values(by=["IDPROC"], ascending=False).drop_duplicates(subset="SERIE", keep="first")
 
-# Convertir las fechas en la columna "FECHA" y manejar errores de formato
-try:
-    df_entregas["FECHA"] = pd.to_datetime(df_entregas["FECHA"], format="%d/%m/%Y", errors="coerce")
-except Exception as e:
-    st.error(f"Error al procesar las fechas: {e}")
-    st.stop()
+# Cruzar con la pestaña PROCESO para verificar el tipo de movimiento
+df_ultimo_movimiento = df_ultimo_movimiento.merge(df_proceso, on="IDPROC", how="left")
 
-# Verificar si hay valores nulos después de la conversión
-if df_entregas["FECHA"].isna().any():
-    st.warning("Algunas fechas no pudieron ser procesadas. Revisa el formato de las fechas en la hoja de cálculo.")
+# Filtrar cilindros con último proceso de "ENTREGA" o "DESPACHO"
+df_no_retorno = df_ultimo_movimiento[
+    (df_ultimo_movimiento["PROCESO"].isin(["DESPACHO", "ENTREGA"])) &
+    (pd.to_datetime(df_ultimo_movimiento["FECHA"], format="%d/%m/%Y", errors="coerce") < fecha_limite)
+]
 
-# Filtrar por cilindros entregados hace más de 30 días
-df_fuera_rotacion = df_entregas[df_entregas["FECHA"] < fecha_limite]
-
-# Mostrar los resultados
-if not df_fuera_rotacion.empty:
-    st.write(f"Cilindros entregados hace más de 30 días (Fecha límite: {fecha_limite.date()}):")
-    st.dataframe(df_fuera_rotacion[["IDPROC", "FECHA", "PROCESO", "CLIENTE", "UBICACION"]])
+# Verificar si hay datos para mostrar
+if not df_no_retorno.empty:
+    # Mostrar los resultados
+    st.write(f"Cilindros no retornados hace más de 30 días (Fecha límite: {fecha_limite.date()}):")
+    st.dataframe(df_no_retorno[["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE"]])
 
     # Botón para descargar el listado en Excel
     @st.cache_data
@@ -87,9 +83,9 @@ if not df_fuera_rotacion.empty:
 
     st.download_button(
         label="Descargar listado en Excel",
-        data=convert_to_excel(df_fuera_rotacion),
-        file_name="Cilindros_Fuera_Rotacion.csv",
+        data=convert_to_excel(df_no_retorno),
+        file_name="Cilindros_No_Retornados.csv",
         mime="text/csv",
     )
 else:
-    st.warning("No se encontraron cilindros fuera de rotación (> 30 días).")
+    st.warning("No se encontraron cilindros no retornados hace más de 30 días.")
