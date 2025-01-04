@@ -60,7 +60,17 @@ fecha_limite = datetime.now() - timedelta(days=30)
 
 # Filtrar cilindros entregados y no retornados
 df_entregas = df_proceso[df_proceso["PROCESO"].isin(["DESPACHO", "ENTREGA"])]
-df_entregas["FECHA"] = pd.to_datetime(df_entregas["FECHA"], format="%Y-%m-%d")
+
+# Convertir las fechas en la columna "FECHA" y manejar errores de formato
+try:
+    df_entregas["FECHA"] = pd.to_datetime(df_entregas["FECHA"], format="%d/%m/%Y", errors="coerce")
+except Exception as e:
+    st.error(f"Error al procesar las fechas: {e}")
+    st.stop()
+
+# Verificar si hay valores nulos después de la conversión
+if df_entregas["FECHA"].isna().any():
+    st.warning("Algunas fechas no pudieron ser procesadas. Revisa el formato de las fechas en la hoja de cálculo.")
 
 # Filtrar por cilindros entregados hace más de 30 días
 df_fuera_rotacion = df_entregas[df_entregas["FECHA"] < fecha_limite]
@@ -73,16 +83,13 @@ if not df_fuera_rotacion.empty:
     # Botón para descargar el listado en Excel
     @st.cache_data
     def convert_to_excel(dataframe):
-        output = pd.ExcelWriter("cilindros_fuera_rotacion.xlsx", engine="xlsxwriter")
-        dataframe.to_excel(output, index=False, sheet_name="Cilindros_Fuera_Rotacion")
-        output.close()
-        return output
+        return dataframe.to_csv(index=False).encode("utf-8")
 
     st.download_button(
         label="Descargar listado en Excel",
         data=convert_to_excel(df_fuera_rotacion),
-        file_name="Cilindros_Fuera_Rotacion.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        file_name="Cilindros_Fuera_Rotacion.csv",
+        mime="text/csv",
     )
 else:
     st.warning("No se encontraron cilindros fuera de rotación (> 30 días).")
