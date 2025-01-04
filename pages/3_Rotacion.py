@@ -61,22 +61,43 @@ df_detalle["IDPROC"] = df_detalle["IDPROC"].astype(str)
 # Cruzar con la pestaña PROCESO
 df_movimientos = df_detalle.merge(df_proceso, on="IDPROC", how="left")
 
-# Filtrar cilindros "Entregados" y "Retornados"
-df_entregados = df_movimientos[df_movimientos["PROCESO"].isin(["DESPACHO", "ENTREGA"])]
-df_retorno = df_movimientos[df_movimientos["PROCESO"].isin(["RETIRO", "RECEPCION"])]
+# Filtrar cilindros entregados hace más de 30 días
+fecha_limite = datetime.now() - timedelta(days=30)
+df_movimientos["FECHA"] = pd.to_datetime(df_movimientos["FECHA"], format="%d/%m/%Y", errors="coerce")
+df_entregados = df_movimientos[
+    (df_movimientos["PROCESO"].isin(["DESPACHO", "ENTREGA"])) &
+    (df_movimientos["FECHA"] < fecha_limite)
+]
 
-# Identificar cilindros no retornados
-cilindros_entregados = set(df_entregados["SERIE"])
-cilindros_retorno = set(df_retorno["SERIE"])
-cilindros_no_retorno = cilindros_entregados - cilindros_retorno
+# Agrupar por SERIE para encontrar el último movimiento de entrega
+df_entregados_ultimo = df_entregados.sort_values(by=["FECHA"], ascending=False).drop_duplicates(subset="SERIE", keep="first")
+
+# Agrupar por SERIE para encontrar el último movimiento de retorno
+df_retorno = df_movimientos[df_movimientos["PROCESO"].isin(["RETIRO", "RECEPCION"])]
+df_retorno_ultimo = df_retorno.sort_values(by=["FECHA"], ascending=False).drop_duplicates(subset="SERIE", keep="first")
+
+# Filtrar los retornos que son posteriores a la entrega
+df_retorno_validos = df_retorno_ultimo.merge(
+    df_entregados_ultimo[["SERIE", "FECHA"]],
+    on="SERIE",
+    suffixes=("_retorno", "_entrega")
+)
+df_retorno_validos = df_retorno_validos[df_retorno_validos["FECHA_retorno"] > df_retorno_validos["FECHA_entrega"]]
+
+# Crear conjuntos de entregas válidas y retornos válidos
+cilindros_entregados_validos = set(df_entregados_ultimo["SERIE"])
+cilindros_retorno_validos = set(df_retorno_validos["SERIE"])
+
+# Diferencia: cilindros entregados pero no retornados válidos
+cilindros_no_retorno = cilindros_entregados_validos - cilindros_retorno_validos
 
 # Filtrar los datos finales
-df_no_retorno = df_entregados[df_entregados["SERIE"].isin(cilindros_no_retorno)]
+df_no_retorno = df_entregados_ultimo[df_entregados_ultimo["SERIE"].isin(cilindros_no_retorno)]
 
 # Verificar si hay datos para mostrar
 if not df_no_retorno.empty:
     # Mostrar los resultados
-    st.write("Cilindros que han sido entregados pero no retornados:")
+    st.write("Cilindros entregados hace más de 30 días y no retornados:")
     st.dataframe(df_no_retorno[["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE"]])
 
     # Botón para descargar el listado en Excel
@@ -91,4 +112,4 @@ if not df_no_retorno.empty:
         mime="text/csv",
     )
 else:
-    st.warning("No se encontraron cilindros no retornados.")
+    st.warning("No se encontraron cilindros entregados hace más de 30 días y no retornados.")
