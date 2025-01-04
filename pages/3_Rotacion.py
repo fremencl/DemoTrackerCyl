@@ -58,6 +58,13 @@ st.subheader("CILINDROS NO RETORNADOS (> 30 DÍAS)")
 # Calcular fecha límite
 fecha_limite = datetime.now() - timedelta(days=30)
 
+# Asegurar que IDPROC es numérico
+df_detalle["IDPROC"] = pd.to_numeric(df_detalle["IDPROC"], errors="coerce")
+df_detalle = df_detalle.dropna(subset=["IDPROC"])
+
+# Convertir IDPROC a entero para garantizar consistencia
+df_detalle["IDPROC"] = df_detalle["IDPROC"].astype(int)
+
 # Obtener el último movimiento de cada cilindro
 df_ultimo_movimiento = df_detalle.sort_values(by=["IDPROC"], ascending=False).drop_duplicates(subset="SERIE", keep="first")
 
