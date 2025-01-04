@@ -53,10 +53,7 @@ df_detalle = get_gsheet_data("DETALLE")
 st.title("Demo TrackerCyl")
 
 # Subtítulo de la aplicación
-st.subheader("CILINDROS NO RETORNADOS (> 30 DÍAS)")
-
-# Calcular fecha límite
-fecha_limite = datetime.now() - timedelta(days=30)
+st.subheader("CILINDROS CON ÚLTIMO MOVIMIENTO DE DESPACHO O ENTREGA")
 
 # Asegurar que IDPROC es numérico
 df_detalle["IDPROC"] = pd.to_numeric(df_detalle["IDPROC"], errors="coerce")
@@ -72,16 +69,13 @@ df_ultimo_movimiento = df_detalle.sort_values(by=["IDPROC"], ascending=False).dr
 df_ultimo_movimiento = df_ultimo_movimiento.merge(df_proceso, on="IDPROC", how="left")
 
 # Filtrar cilindros con último proceso de "ENTREGA" o "DESPACHO"
-df_no_retorno = df_ultimo_movimiento[
-    (df_ultimo_movimiento["PROCESO"].isin(["DESPACHO", "ENTREGA"])) &
-    (pd.to_datetime(df_ultimo_movimiento["FECHA"], format="%d/%m/%Y", errors="coerce") < fecha_limite)
-]
+df_entrega_despacho = df_ultimo_movimiento[df_ultimo_movimiento["PROCESO"].isin(["DESPACHO", "ENTREGA"])]
 
 # Verificar si hay datos para mostrar
-if not df_no_retorno.empty:
+if not df_entrega_despacho.empty:
     # Mostrar los resultados
-    st.write(f"Cilindros no retornados hace más de 30 días (Fecha límite: {fecha_limite.date()}):")
-    st.dataframe(df_no_retorno[["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE"]])
+    st.write("Cilindros con último movimiento de DESPACHO o ENTREGA:")
+    st.dataframe(df_entrega_despacho[["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE"]])
 
     # Botón para descargar el listado en Excel
     @st.cache_data
@@ -90,9 +84,9 @@ if not df_no_retorno.empty:
 
     st.download_button(
         label="Descargar listado en Excel",
-        data=convert_to_excel(df_no_retorno),
-        file_name="Cilindros_No_Retornados.csv",
+        data=convert_to_excel(df_entrega_despacho),
+        file_name="Cilindros_Entrega_Despacho.csv",
         mime="text/csv",
     )
 else:
-    st.warning("No se encontraron cilindros no retornados hace más de 30 días.")
+    st.warning("No se encontraron cilindros con último movimiento de DESPACHO o ENTREGA.")
