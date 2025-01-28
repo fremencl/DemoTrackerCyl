@@ -61,13 +61,13 @@ target_cylinder = st.text_input("Ingrese la ID del cilindro a buscar:")
 if st.button("Buscar"):
     if target_cylinder:
         # Filtrar las transacciones asociadas a la ID de cilindro
-        ids_procesos = df_detalle[df_detalle["SERIE"] == target_cylinder]["IDPROC"]
-        df_resultados = df_proceso[df_proceso["IDPROC"].isin(ids_procesos)]
+        ids_procesos = df_detalle[df_detalle["SERIE"] == target_cylinder]["DOCUMENTO"]
+        df_resultados = df_proceso[df_proceso["DOCUMENTO"].isin(ids_procesos)]
 
         # Mostrar los resultados
         if not df_resultados.empty:
             st.write(f"Movimientos para el cilindro ID: {target_cylinder}")
-            st.dataframe(df_resultados[["FECHA", "HORA", "IDPROC", "PROCESO", "CLIENTE", "UBICACION"]])
+            st.dataframe(df_resultados[["FECHA", "HORA", "DOCUMENTO", "PROCESO", "CLIENTE", "UBICACION"]])
         else:
             st.warning("No se encontraron movimientos para el cilindro ingresado.")
     else:
