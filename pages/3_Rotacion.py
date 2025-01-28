@@ -56,10 +56,10 @@ st.title("Demo TrackerCyl")
 st.subheader("CILINDROS NO RETORNADOS")
 
 # Asegurar que IDPROC sea tratado como string
-df_detalle["IDPROC"] = df_detalle["IDPROC"].astype(str)
+df_detalle["DOCUMENTO"] = df_detalle["DOCUMENTO"].astype(str)
 
 # Cruzar con la pestaña PROCESO
-df_movimientos = df_detalle.merge(df_proceso, on="IDPROC", how="left")
+df_movimientos = df_detalle.merge(df_proceso, on="DOCUMENTO", how="left")
 
 # Filtrar cilindros entregados hace más de 30 días
 fecha_limite = datetime.now() - timedelta(days=30)
@@ -98,7 +98,7 @@ df_no_retorno = df_entregados_ultimo[df_entregados_ultimo["SERIE"].isin(cilindro
 if not df_no_retorno.empty:
     # Mostrar los resultados
     st.write("Cilindros entregados hace más de 30 días y no retornados:")
-    st.dataframe(df_no_retorno[["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE"]])
+    st.dataframe(df_no_retorno[["SERIE", "DOCUMENTO", "FECHA", "PROCESO", "CLIENTE"]])
 
     # Botón para descargar el listado en Excel
     @st.cache_data
