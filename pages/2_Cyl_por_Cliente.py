@@ -11,7 +11,7 @@ if not check_password():
     st.stop()
 
 # Funciones para obtener datos de Google Sheets
-@st.cache_data
+# @st.cache_data
 def get_gsheet_data(sheet_name):
     try:
         # Cargar las credenciales desde los secretos de Streamlit
