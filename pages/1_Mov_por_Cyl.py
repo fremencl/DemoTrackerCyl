@@ -10,7 +10,6 @@ from auth import check_password
 if not check_password():
     st.stop()
 
-# Funciones para obtener datos de Google Sheets
 @st.cache_data
 def get_gsheet_data(sheet_name):
     try:
@@ -40,7 +39,6 @@ def get_gsheet_data(sheet_name):
         return pd.DataFrame(data)
     
     except Exception as e:
-        # En caso de error, mostrar el mensaje y retornar None
         st.error(f"Error al conectar con Google Sheets: {e}")
         return None
 
@@ -48,20 +46,27 @@ def get_gsheet_data(sheet_name):
 df_proceso = get_gsheet_data("PROCESO")
 df_detalle = get_gsheet_data("DETALLE")
 
-# Título de la aplicación
-st.title("Demo TrackerCyl")
+# Normalizar la columna SERIE en df_detalle
+# 1) Convertimos a string
+df_detalle["SERIE"] = df_detalle["SERIE"].astype(str)
 
-# Subtítulo de la aplicación
+# 2) Quitamos separadores de miles (comas). 
+#    Si tienes otros caracteres no deseados, agrégalos al replace.
+df_detalle["SERIE"] = df_detalle["SERIE"].str.replace(",", "", regex=False)
+
+st.title("Demo TrackerCyl")
 st.subheader("CONSULTA DE MOVIMIENTOS POR CILINDRO")
 
 # Cuadro de texto para ingresar la ID del cilindro
 target_cylinder = st.text_input("Ingrese la ID del cilindro a buscar:")
 
-# Botón de búsqueda
 if st.button("Buscar"):
     if target_cylinder:
+        # Normalizar también lo que ingresa el usuario
+        target_cylinder_normalized = target_cylinder.replace(",", "")
+
         # Filtrar las transacciones asociadas a la ID de cilindro
-        ids_procesos = df_detalle[df_detalle["SERIE"] == target_cylinder]["DOCUMENTO"]
+        ids_procesos = df_detalle[df_detalle["SERIE"] == target_cylinder_normalized]["DOCUMENTO"]
         df_resultados = df_proceso[df_proceso["DOCUMENTO"].isin(ids_procesos)]
 
         # Mostrar los resultados
@@ -72,4 +77,3 @@ if st.button("Buscar"):
             st.warning("No se encontraron movimientos para el cilindro ingresado.")
     else:
         st.warning("Por favor, ingrese una ID de cilindro.")
-
