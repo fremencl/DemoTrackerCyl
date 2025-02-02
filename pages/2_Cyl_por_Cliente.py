@@ -11,17 +11,20 @@ if not check_password():
     st.stop()
 
 # Funciones para obtener datos de Google Sheets
-# @st.cache_data
 def get_gsheet_data(sheet_name):
     try:
         # Cargar las credenciales desde los secretos de Streamlit
         creds_dict = st.secrets["gcp_service_account"]
         
         # Definir los scopes necesarios
-        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        scopes = ["https://www.googleapis.com/auth/spreadsheets", 
+                  "https://www.googleapis.com/auth/drive"]
 
         # Crear las credenciales con los scopes especificados
-        credentials = service_account.Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        credentials = service_account.Credentials.from_service_account_info(
+            creds_dict, 
+            scopes=scopes
+        )
         
         # Conectar con gspread usando las credenciales
         client = gspread.authorize(credentials)
@@ -34,13 +37,20 @@ def get_gsheet_data(sheet_name):
         return pd.DataFrame(data)
     
     except Exception as e:
-        # En caso de error, mostrar el mensaje y retornar None
         st.error(f"Error al conectar con Google Sheets: {e}")
         return None
 
 # Cargar los datos desde Google Sheets
 df_proceso = get_gsheet_data("PROCESO")
 df_detalle = get_gsheet_data("DETALLE")
+
+# -----------------------------------------------------------------------
+# NORMALIZACIÓN DE LA COLUMNA "SERIE" EN df_detalle
+# -----------------------------------------------------------------------
+if df_detalle is not None:
+    df_detalle["SERIE"] = df_detalle["SERIE"].astype(str)              # Convertir todo a texto
+    df_detalle["SERIE"] = df_detalle["SERIE"].str.replace(",", "", regex=False)
+# -----------------------------------------------------------------------
 
 # Título de la aplicación
 st.title("Demo TrackerCyl")
@@ -49,8 +59,11 @@ st.title("Demo TrackerCyl")
 st.subheader("CONSULTA DE CILINDROS POR CLIENTE")
 
 # Campo desplegable para seleccionar el cliente
-clientes_unicos = df_proceso["CLIENTE"].unique()
-cliente_seleccionado = st.selectbox("Seleccione el cliente:", clientes_unicos)
+if df_proceso is not None:
+    clientes_unicos = df_proceso["CLIENTE"].unique()
+    cliente_seleccionado = st.selectbox("Seleccione el cliente:", clientes_unicos)
+else:
+    cliente_seleccionado = None
 
 # Botón de búsqueda
 if st.button("Buscar Cilindros del Cliente"):
@@ -59,14 +72,30 @@ if st.button("Buscar Cilindros del Cliente"):
         ids_procesos_cliente = df_proceso[df_proceso["CLIENTE"] == cliente_seleccionado]["DOCUMENTO"]
         df_cilindros_cliente = df_detalle[df_detalle["DOCUMENTO"].isin(ids_procesos_cliente)]
 
-        # Identificar los cilindros cuyo último proceso sea "DESPACHO" o "ENTREGA"
-        df_procesos_filtrados = df_proceso[df_proceso["DOCUMENTO"].isin(df_cilindros_cliente["DOCUMENTO"])].sort_values(by=["FECHA", "HORA"])
-        df_ultimos_procesos = df_procesos_filtrados.drop_duplicates(subset="DOCUMENTO", keep="last")
-        cilindros_en_cliente = df_ultimos_procesos[df_ultimos_procesos["PROCESO"].isin(["DESPACHO", "ENTREGA"])]
-        ids_cilindros_en_cliente = df_cilindros_cliente[df_cilindros_cliente["DOCUMENTO"].isin(cilindros_en_cliente["DOCUMENTO"])]
+        # Ordenar las transacciones por fecha y hora
+        df_procesos_filtrados = df_proceso[
+            df_proceso["DOCUMENTO"].isin(df_cilindros_cliente["DOCUMENTO"])
+        ].sort_values(by=["FECHA", "HORA"])
 
-        # Agregar la fecha de entrega del cilindro
-        ids_cilindros_en_cliente = ids_cilindros_en_cliente.merge(df_ultimos_procesos[['DOCUMENTO', 'FECHA']], on='DOCUMENTO', how='left')
+        # Conservar sólo el último registro por cada DOCUMENTO
+        df_ultimos_procesos = df_procesos_filtrados.drop_duplicates(subset="DOCUMENTO", keep="last")
+
+        # Filtrar los cilindros cuyo último proceso sea "DESPACHO" o "ENTREGA"
+        cilindros_en_cliente = df_ultimos_procesos[
+            df_ultimos_procesos["PROCESO"].isin(["DESPACHO", "ENTREGA"])
+        ]
+
+        # Filtrar los registros de df_detalle que coincidan
+        ids_cilindros_en_cliente = df_cilindros_cliente[
+            df_cilindros_cliente["DOCUMENTO"].isin(cilindros_en_cliente["DOCUMENTO"])
+        ]
+
+        # Agregar la fecha del último proceso
+        ids_cilindros_en_cliente = ids_cilindros_en_cliente.merge(
+            df_ultimos_procesos[['DOCUMENTO', 'FECHA']], 
+            on='DOCUMENTO', 
+            how='left'
+        )
 
         # Mostrar los cilindros en el cliente
         if not ids_cilindros_en_cliente.empty:
