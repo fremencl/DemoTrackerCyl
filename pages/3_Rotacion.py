@@ -64,7 +64,7 @@ df_detalle["SERIE"] = df_detalle["SERIE"].str.replace(",", "", regex=False)
 # -----------------------------------------------------------------------
 
 # Cruce con la pestaña PROCESO
-df_movimientos = df_detalle.merge(df_proceso, on="IDPROC", how="left")
+df_movimientos = df_detalle.merge(df_proceso, on="PROCESO", how="left")
 
 # Filtrar cilindros entregados hace más de 30 días
 fecha_limite = datetime.now() - timedelta(days=30)
