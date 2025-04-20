@@ -54,7 +54,7 @@ st.title("Demo TrackerCyl")
 st.subheader("CILINDROS NO RETORNADOS")
 
 # Asegurar que DOCUMENTO sea tratado como texto
-df_detalle["DOCUMENTO"] = df_detalle["DOCUMENTO"].astype(str)
+df_detalle["IDPROC"] = df_detalle["IDPROC"].astype(str)
 
 # -----------------------------------------------------------------------
 # NORMALIZACIÓN DE LA COLUMNA "SERIE" EN df_detalle
@@ -64,7 +64,7 @@ df_detalle["SERIE"] = df_detalle["SERIE"].str.replace(",", "", regex=False)
 # -----------------------------------------------------------------------
 
 # Cruce con la pestaña PROCESO
-df_movimientos = df_detalle.merge(df_proceso, on="DOCUMENTO", how="left")
+df_movimientos = df_detalle.merge(df_proceso, on="IDPROC", how="left")
 
 # Filtrar cilindros entregados hace más de 30 días
 fecha_limite = datetime.now() - timedelta(days=30)
@@ -114,7 +114,7 @@ if not df_no_retorno.empty:
     # Simplificar la fecha al formato YYYY-MM-DD
     df_no_retorno["FECHA"] = df_no_retorno["FECHA"].dt.strftime("%Y-%m-%d")
 
-    st.dataframe(df_no_retorno[["SERIE", "DOCUMENTO", "FECHA", "PROCESO", "CLIENTE"]])
+    st.dataframe(df_no_retorno[["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE"]])
 
     # Función para convertir el DataFrame a CSV (sin caché)
     def convert_to_excel(dataframe):
