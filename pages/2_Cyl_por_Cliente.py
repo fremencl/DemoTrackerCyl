@@ -69,16 +69,16 @@ else:
 if st.button("Buscar Cilindros del Cliente"):
     if cliente_seleccionado:
         # Filtrar las transacciones asociadas al cliente seleccionado
-        ids_procesos_cliente = df_proceso[df_proceso["CLIENTE"] == cliente_seleccionado]["DOCUMENTO"]
-        df_cilindros_cliente = df_detalle[df_detalle["DOCUMENTO"].isin(ids_procesos_cliente)]
+        ids_procesos_cliente = df_proceso[df_proceso["CLIENTE"] == cliente_seleccionado]["IDPROC"]
+        df_cilindros_cliente = df_detalle[df_detalle["IDPROC"].isin(ids_procesos_cliente)]
 
         # Ordenar las transacciones por fecha y hora
         df_procesos_filtrados = df_proceso[
-            df_proceso["DOCUMENTO"].isin(df_cilindros_cliente["DOCUMENTO"])
+            df_proceso["IDPROC"].isin(df_cilindros_cliente["IDPROC"])
         ].sort_values(by=["FECHA", "HORA"])
 
         # Conservar sólo el último registro por cada DOCUMENTO
-        df_ultimos_procesos = df_procesos_filtrados.drop_duplicates(subset="DOCUMENTO", keep="last")
+        df_ultimos_procesos = df_procesos_filtrados.drop_duplicates(subset="IDPROC", keep="last")
 
         # Filtrar los cilindros cuyo último proceso sea "DESPACHO" o "ENTREGA"
         cilindros_en_cliente = df_ultimos_procesos[
@@ -87,20 +87,20 @@ if st.button("Buscar Cilindros del Cliente"):
 
         # Filtrar los registros de df_detalle que coincidan
         ids_cilindros_en_cliente = df_cilindros_cliente[
-            df_cilindros_cliente["DOCUMENTO"].isin(cilindros_en_cliente["DOCUMENTO"])
+            df_cilindros_cliente["IDPROC"].isin(cilindros_en_cliente["IDPROC"])
         ]
 
         # Agregar la fecha del último proceso
         ids_cilindros_en_cliente = ids_cilindros_en_cliente.merge(
-            df_ultimos_procesos[['DOCUMENTO', 'FECHA']], 
-            on='DOCUMENTO', 
+            df_ultimos_procesos[['IDPROC', 'FECHA']], 
+            on='IDPROC', 
             how='left'
         )
 
         # Mostrar los cilindros en el cliente
         if not ids_cilindros_en_cliente.empty:
             st.write(f"Cilindros actualmente en el cliente: {cliente_seleccionado}")
-            st.dataframe(ids_cilindros_en_cliente[["SERIE", "DOCUMENTO", "FECHA"]])
+            st.dataframe(ids_cilindros_en_cliente[["SERIE", "IDPROC", "FECHA"]])
         else:
             st.warning("No se encontraron cilindros en el cliente seleccionado.")
     else:
