@@ -57,44 +57,45 @@ df_movimientos = df_detalle.merge(
 st.title("Demo TrackerCyl")
 st.subheader("Último Movimiento de Cada Cilindro")
 
-# Normalizar serie
+# Normalización de serie
 df_movimientos["SERIE"] = df_movimientos["SERIE"].astype(str).str.replace(",", "", regex=False)
 
 # Conversión de fecha
 df_movimientos["FECHA"] = pd.to_datetime(df_movimientos["FECHA"], format="%d/%m/%Y", errors="coerce")
 
-# Último movimiento por SERIE
-df_ultimo_movimiento = (
-    df_movimientos
-    .sort_values(by=["FECHA"], ascending=False)
-    .drop_duplicates(subset="SERIE", keep="first")
-)
+# Primero preparamos solo la lista de ubicaciones (sin procesar toda la data aún)
+ubicaciones = df_movimientos["UBICACION"].dropna().unique().tolist()
+ubicacion_seleccionada = st.selectbox("Selecciona una ubicación:", ["Seleccionar..."] + ubicaciones)
 
-# Filtro de Ubicación
-ubicaciones = df_ultimo_movimiento["UBICACION"].dropna().unique().tolist()
-ubicacion_seleccionada = st.selectbox("Selecciona una ubicación:", ["Todas"] + ubicaciones)
+# Si el usuario ha seleccionado una ubicación válida
+if ubicacion_seleccionada != "Seleccionar...":
+    # Filtrar por ubicación
+    df_filtrado = df_movimientos[df_movimientos["UBICACION"] == ubicacion_seleccionada]
 
-if ubicacion_seleccionada != "Todas":
-    df_filtrado = df_ultimo_movimiento[df_ultimo_movimiento["UBICACION"] == ubicacion_seleccionada]
-else:
-    df_filtrado = df_ultimo_movimiento
-
-# Mostrar resultados
-if not df_filtrado.empty:
-    st.write(f"Mostrando últimos movimientos{' para ubicación: ' + ubicacion_seleccionada if ubicacion_seleccionada != 'Todas' else ''}:")
-
-    df_filtrado["FECHA"] = df_filtrado["FECHA"].dt.strftime("%Y-%m-%d")
-
-    st.dataframe(df_filtrado[["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE", "UBICACION"]])
-
-    def convert_to_excel(dataframe):
-        return dataframe.to_csv(index=False).encode("utf-8")
-
-    st.download_button(
-        label="Descargar listado en Excel",
-        data=convert_to_excel(df_filtrado),
-        file_name="Ultimo_Movimiento_Cilindros.csv",
-        mime="text/csv",
+    # Obtener último movimiento por SERIE solo en el subset filtrado
+    df_ultimo_movimiento = (
+        df_filtrado
+        .sort_values(by=["FECHA"], ascending=False)
+        .drop_duplicates(subset="SERIE", keep="first")
     )
+
+    if not df_ultimo_movimiento.empty:
+        st.write(f"Últimos movimientos para ubicación: {ubicacion_seleccionada}")
+
+        df_ultimo_movimiento["FECHA"] = df_ultimo_movimiento["FECHA"].dt.strftime("%Y-%m-%d")
+
+        st.dataframe(df_ultimo_movimiento[["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE", "UBICACION"]])
+
+        def convert_to_excel(dataframe):
+            return dataframe.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            label="Descargar listado en Excel",
+            data=convert_to_excel(df_ultimo_movimiento),
+            file_name=f"Ultimo_Movimiento_{ubicacion_seleccionada}.csv",
+            mime="text/csv",
+        )
+    else:
+        st.warning("No se encontraron movimientos para la ubicación seleccionada.")
 else:
-    st.warning("No se encontraron datos para los criterios seleccionados.")
+    st.info("Por favor, selecciona una ubicación para ver los resultados.")
