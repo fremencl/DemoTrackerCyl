@@ -33,7 +33,7 @@ with col2:
 
 # Títulos y subtítulos
 st.write("### SISTEMA TRACKING DE CILINDROS :chart_with_upwards_trend:")
-st.write("#### URQUINOX RANCAGUA")
+st.write("#### URKINOX RANCAGUA")
 
 st.markdown("---")
 
