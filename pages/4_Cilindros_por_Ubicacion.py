@@ -84,7 +84,7 @@ if ubicacion_seleccionada != "Seleccionar...":
 
         df_ultimo_movimiento["FECHA"] = df_ultimo_movimiento["FECHA"].dt.strftime("%Y-%m-%d")
 
-        st.dataframe(df_ultimo_movimiento[["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE", "UBICACION"]])
+        st.dataframe(df_ultimo_movimiento[["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE", "SERVICIO", "UBICACION"]])
 
         def convert_to_excel(dataframe):
             return dataframe.to_csv(index=False).encode("utf-8")
