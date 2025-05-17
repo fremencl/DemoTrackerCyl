@@ -1,3 +1,5 @@
+# pages/5_RangoFechas.py
+
 import streamlit as st
 import gspread
 from google.oauth2 import service_account
@@ -56,7 +58,7 @@ if df_proceso is not None:
 
 # ————————————————————————————————
 # 5) Merge para traer SERIE a los procesos
-#    (df_proceso ya contiene SERVICIO)
+#    df_proceso ya contiene SERVICIO
 # ————————————————————————————————
 if df_proceso is not None and df_detalle is not None:
     df_full = df_proceso.merge(
@@ -97,7 +99,7 @@ if st.button("Buscar"):
         if df_filtrado.empty:
             st.warning("No se encontraron movimientos en ese rango de fechas.")
         else:
-            # ▶️ Formatear FECHA para mostrar solo la parte 'YYYY-MM-DD'
+            # ▶️ Convertir a date (sin hora)
             df_filtrado["FECHA"] = df_filtrado["FECHA"].dt.date
 
             st.success(
