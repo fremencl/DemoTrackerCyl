@@ -1,3 +1,5 @@
+# pages/5_Movimientos_por_fecha.py
+
 import streamlit as st
 import gspread
 from google.oauth2 import service_account
@@ -38,7 +40,16 @@ def get_gsheet_data(sheet_name: str) -> pd.DataFrame | None:
 df_proceso = get_gsheet_data("PROCESO")
 df_detalle = get_gsheet_data("DETALLE")
 
-# Normalizar la columna SERIE en df_detalle
+# ————————————————————————————————
+# 4) Normalizar nombres de columnas a mayúsculas y sin espacios
+# ————————————————————————————————
+for df in (df_proceso, df_detalle):
+    if df is not None:
+        df.columns = df.columns.str.strip().str.upper()
+
+# ————————————————————————————————
+# 5) Limpiar la columna SERIE en df_detalle
+# ————————————————————————————————
 if df_detalle is not None:
     df_detalle["SERIE"] = (
         df_detalle["SERIE"]
@@ -47,7 +58,7 @@ if df_detalle is not None:
     )
 
 # ————————————————————————————————
-# 4) Convertir FECHA en datetime
+# 6) Convertir FECHA en datetime
 # ————————————————————————————————
 if df_proceso is not None:
     df_proceso["FECHA"] = pd.to_datetime(
@@ -55,12 +66,14 @@ if df_proceso is not None:
     )
 
 # ————————————————————————————————
-# 5) Merge para traer SERIE a los procesos
-#    (df_proceso ya contiene SERVICIO)
+# 7) Construir df_full incluyendo SERIE y SERVICIO
+#    (SERVICIO viene de df_detalle)
 # ————————————————————————————————
 if df_proceso is not None and df_detalle is not None:
+    # asegurarnos de tomar sólo una fila por IDPROC en df_detalle
+    detalle_unico = df_detalle[["IDPROC", "SERIE", "SERVICIO"]].drop_duplicates("IDPROC")
     df_full = df_proceso.merge(
-        df_detalle[["IDPROC", "SERIE"]],
+        detalle_unico,
         on="IDPROC",
         how="left"
     )
@@ -68,12 +81,11 @@ else:
     df_full = pd.DataFrame()
 
 # ————————————————————————————————
-# 6) UI
+# 8) UI: selección de rango de fechas
 # ————————————————————————————————
 st.title("Demo TrackerCyl")
 st.subheader("CONSULTA DE MOVIMIENTOS POR RANGO DE FECHA")
 
-# Por defecto: última semana
 hoy = datetime.now().date()
 predeterminado = (hoy - pd.Timedelta(days=7), hoy)
 
@@ -83,33 +95,36 @@ fecha_inicio, fecha_termino = st.date_input(
     help="Elija fecha de inicio y fecha de término"
 )
 
+# ————————————————————————————————
+# 9) Al hacer clic en Buscar
+# ————————————————————————————————
 if st.button("Buscar"):
-    # Validar rango
     if fecha_inicio > fecha_termino:
         st.warning("La fecha de inicio no puede ser posterior a la fecha de término.")
     else:
+        # Filtrar por fecha (solo parte date, sin hora)
         mask = (
             (df_full["FECHA"].dt.date >= fecha_inicio) &
             (df_full["FECHA"].dt.date <= fecha_termino)
         )
-        df_filtrado = df_full.loc[mask]
+        df_filtrado = df_full.loc[mask].copy()
 
         if df_filtrado.empty:
             st.warning("No se encontraron movimientos en ese rango de fechas.")
         else:
+            # Convertir FECHA a puro date (quita la hora)
+            df_filtrado["FECHA"] = df_filtrado["FECHA"].dt.date
+
             st.success(
                 f"Movimientos desde {fecha_inicio.isoformat()} hasta {fecha_termino.isoformat()}:"
             )
-            # — Mostrar la columna SERVICIO además de las demás —
             st.dataframe(
                 df_filtrado[
                     ["FECHA", "IDPROC", "PROCESO", "CLIENTE", "UBICACION", "SERIE", "SERVICIO"]
                 ]
             )
 
-            # ————————————————————————————————
-            # Descarga en CSV
-            # ————————————————————————————————
+            # Función compacta para CSV
             def convert_to_csv(df: pd.DataFrame) -> bytes:
                 return df.to_csv(index=False).encode("utf-8")
 
