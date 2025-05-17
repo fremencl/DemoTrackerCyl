@@ -98,7 +98,7 @@ if st.button("Buscar"):
             st.warning("No se encontraron movimientos en ese rango de fechas.")
         else:
             # ▶️ Formatear FECHA para mostrar solo la parte 'YYYY-MM-DD'
-            df_filtrado["FECHA"] = df_filtrado["FECHA"].dt.strftime("%Y-%m-%d")
+            df_filtrado["FECHA"] = df_filtrado["FECHA"].dt.date
 
             st.success(
                 f"Movimientos desde {fecha_inicio.isoformat()} hasta {fecha_termino.isoformat()}:"
