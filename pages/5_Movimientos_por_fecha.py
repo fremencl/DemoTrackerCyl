@@ -40,7 +40,17 @@ def get_gsheet_data(sheet_name: str) -> pd.DataFrame | None:
 df_proceso = get_gsheet_data("PROCESO")
 df_detalle = get_gsheet_data("DETALLE")
 
-# Normalizar la columna SERIE en df_detalle
+# ————————————————————————————————
+# 4) Normalizar nombres de columnas
+# ————————————————————————————————
+if df_proceso is not None:
+    df_proceso.columns = df_proceso.columns.str.strip().str.upper()
+if df_detalle is not None:
+    df_detalle.columns = df_detalle.columns.str.strip().str.upper()
+
+# ————————————————————————————————
+# 5) Normalizar la columna SERIE en df_detalle
+# ————————————————————————————————
 if df_detalle is not None:
     df_detalle["SERIE"] = (
         df_detalle["SERIE"]
@@ -49,7 +59,7 @@ if df_detalle is not None:
     )
 
 # ————————————————————————————————
-# 4) Convertir FECHA en datetime
+# 6) Convertir FECHA en datetime
 # ————————————————————————————————
 if df_proceso is not None:
     df_proceso["FECHA"] = pd.to_datetime(
@@ -57,8 +67,8 @@ if df_proceso is not None:
     )
 
 # ————————————————————————————————
-# 5) Merge para traer SERIE a los procesos
-#    df_proceso ya contiene SERVICIO
+# 7) Merge para traer SERIE a los procesos
+#    df_proceso ya contiene SERVICIO (en mayúsculas)
 # ————————————————————————————————
 if df_proceso is not None and df_detalle is not None:
     df_full = df_proceso.merge(
@@ -70,7 +80,7 @@ else:
     df_full = pd.DataFrame()
 
 # ————————————————————————————————
-# 6) UI
+# 8) UI
 # ————————————————————————————————
 st.title("Demo TrackerCyl")
 st.subheader("CONSULTA DE MOVIMIENTOS POR RANGO DE FECHA")
@@ -99,7 +109,7 @@ if st.button("Buscar"):
         if df_filtrado.empty:
             st.warning("No se encontraron movimientos en ese rango de fechas.")
         else:
-            # ▶️ Convertir a date (sin hora)
+            # ▶️ Convertir FECHA a date puro (sin hora)
             df_filtrado["FECHA"] = df_filtrado["FECHA"].dt.date
 
             st.success(
