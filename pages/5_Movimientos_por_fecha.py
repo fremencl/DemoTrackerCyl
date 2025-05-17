@@ -1,5 +1,3 @@
-# pages/5_RangoFechas.py
-
 import streamlit as st
 import gspread
 from google.oauth2 import service_account
@@ -58,6 +56,7 @@ if df_proceso is not None:
 
 # ————————————————————————————————
 # 5) Merge para traer SERIE a los procesos
+#    (df_proceso ya contiene SERVICIO)
 # ————————————————————————————————
 if df_proceso is not None and df_detalle is not None:
     df_full = df_proceso.merge(
@@ -101,9 +100,10 @@ if st.button("Buscar"):
             st.success(
                 f"Movimientos desde {fecha_inicio.isoformat()} hasta {fecha_termino.isoformat()}:"
             )
+            # — Mostrar la columna SERVICIO además de las demás —
             st.dataframe(
                 df_filtrado[
-                    ["FECHA", "IDPROC", "PROCESO", "CLIENTE", "UBICACION", "SERIE"]
+                    ["FECHA", "IDPROC", "PROCESO", "CLIENTE", "UBICACION", "SERIE", "SERVICIO"]
                 ]
             )
 
