@@ -54,7 +54,7 @@ df_movimientos = df_detalle.merge(
 )
 
 # Título y subtítulo
-st.title("Demo TrackerCyl")
+st.title("FASTRACK")
 st.subheader("Último Movimiento de Cada Cilindro")
 
 # Normalización de serie
