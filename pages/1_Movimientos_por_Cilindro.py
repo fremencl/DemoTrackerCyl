@@ -47,7 +47,7 @@ df_detalle["SERIE"] = (
 # ------------------------------------------------------------------
 # UI
 # ------------------------------------------------------------------
-st.title("Demo TrackerCyl")
+st.title("FASTRACK")
 st.subheader("CONSULTA DE MOVIMIENTOS POR CILINDRO")
 
 target_cylinder = st.text_input("Ingrese la ID del cilindro a buscar:")
