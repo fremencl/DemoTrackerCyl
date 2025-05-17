@@ -10,69 +10,76 @@ from auth import check_password
 if not check_password():
     st.stop()
 
-# @st.cache_data
-def get_gsheet_data(sheet_name):
+# ------------------------------------------------------------------
+# Función de carga desde Google Sheets
+# ------------------------------------------------------------------
+def get_gsheet_data(sheet_name: str) -> pd.DataFrame | None:
     try:
-        # Cargar las credenciales desde los secretos de Streamlit
         creds_dict = st.secrets["gcp_service_account"]
-        
-        # Definir los scopes necesarios
         scopes = [
-            "https://www.googleapis.com/auth/spreadsheets", 
-            "https://www.googleapis.com/auth/drive"
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
         ]
-
-        # Crear las credenciales con los scopes especificados
         credentials = service_account.Credentials.from_service_account_info(
-            creds_dict, 
-            scopes=scopes
+            creds_dict, scopes=scopes
         )
-        
-        # Conectar con gspread usando las credenciales
         client = gspread.authorize(credentials)
-        
-        # Abrir la hoja de cálculo y obtener los datos
         sheet = client.open("TRAZABILIDAD").worksheet(sheet_name)
         data = sheet.get_all_records()
-        
-        # Retornar los datos como un DataFrame de pandas
         return pd.DataFrame(data)
-    
     except Exception as e:
         st.error(f"Error al conectar con Google Sheets: {e}")
         return None
 
-# Cargar los datos desde Google Sheets
+# ------------------------------------------------------------------
+# Cargar datos
+# ------------------------------------------------------------------
 df_proceso = get_gsheet_data("PROCESO")
 df_detalle = get_gsheet_data("DETALLE")
 
-# Normalizar la columna SERIE en df_detalle
-# 1) Convertimos a string
-df_detalle["SERIE"] = df_detalle["SERIE"].astype(str)
+# Normalizar columna SERIE
+df_detalle["SERIE"] = (
+    df_detalle["SERIE"]
+    .astype(str)
+    .str.replace(",", "", regex=False)
+)
 
-# 2) Quitamos separadores de miles (comas). 
-#    Si tienes otros caracteres no deseados, agrégalos al replace.
-df_detalle["SERIE"] = df_detalle["SERIE"].str.replace(",", "", regex=False)
-
+# ------------------------------------------------------------------
+# UI
+# ------------------------------------------------------------------
 st.title("Demo TrackerCyl")
 st.subheader("CONSULTA DE MOVIMIENTOS POR CILINDRO")
 
-# Cuadro de texto para ingresar la ID del cilindro
 target_cylinder = st.text_input("Ingrese la ID del cilindro a buscar:")
 
 if st.button("Buscar"):
     if target_cylinder:
-        # Normalizar también lo que ingresa el usuario
         target_cylinder_normalized = target_cylinder.replace(",", "")
-
-        # Filtrar las transacciones asociadas a la ID de cilindro
-        ids_procesos = df_detalle[df_detalle["SERIE"] == target_cylinder_normalized]["IDPROC"]
+        ids_procesos = df_detalle.loc[
+            df_detalle["SERIE"] == target_cylinder_normalized, "IDPROC"
+        ]
         df_resultados = df_proceso[df_proceso["IDPROC"].isin(ids_procesos)]
 
-        # Mostrar los resultados
         if not df_resultados.empty:
-            st.write(f"Movimientos para el cilindro ID: {target_cylinder}")
-            st.dataframe(df_resultados[["FECHA", "HORA", "IDPROC", "PROCESO", "CLIENTE", "UBICACION"]])
+            st.success(f"Movimientos para el cilindro ID {target_cylinder}:")
+            st.dataframe(
+                df_resultados[
+                    ["FECHA", "HORA", "IDPROC", "PROCESO", "CLIENTE", "UBICACION"]
+                ]
+            )
+
+            # ------------------------------------------------------------------
+            # Función compacta para convertir a CSV y luego a bytes
+            # ------------------------------------------------------------------
+            def convert_to_csv(dataframe: pd.DataFrame) -> bytes:
+                return dataframe.to_csv(index=False).encode("utf-8")
+
+            st.download_button(
+                label="⬇️ Descargar resultados en CSV",
+                data=convert_to_csv(df_resultados),
+                file_name=f"movimientos_{target_cylinder}.csv",
+                mime="text/csv",
+            )
         else:
             st.warning("No se encontraron movimientos para el cilindro ingresado.")
     else:
