@@ -4,16 +4,11 @@ from google.oauth2 import service_account
 import pandas as pd
 from datetime import datetime, timedelta
 
-# 1) Importamos la función de autenticación
 from auth import check_password
 
-# Primero verificamos la contraseña.
 if not check_password():
     st.stop()
 
-# ------------------------------------------------------------------
-# Función para obtener datos desde Google Sheets
-# ------------------------------------------------------------------
 def get_gsheet_data(sheet_name):
     try:
         creds_dict = st.secrets["gcp_service_account"]
@@ -26,88 +21,69 @@ def get_gsheet_data(sheet_name):
         )
         client = gspread.authorize(credentials)
         sheet = client.open("TRAZABILIDAD").worksheet(sheet_name)
-        data = sheet.get_all_records()
-        return pd.DataFrame(data)
+        return pd.DataFrame(sheet.get_all_records())
     except Exception as e:
         st.error(f"Error al conectar con Google Sheets: {e}")
         return None
 
-# ------------------------------------------------------------------
-# Cargar datos desde las hojas
-# ------------------------------------------------------------------
+# Cargar ambas hojas
 df_proceso = get_gsheet_data("PROCESO")
 df_detalle = get_gsheet_data("DETALLE")
 
-# ------------------------------------------------------------------
-# Normalización de columnas
-# ------------------------------------------------------------------
+# Normalizar nombres de columnas
 df_proceso.columns = df_proceso.columns.str.strip().str.upper()
 df_detalle.columns = df_detalle.columns.str.strip().str.upper()
 
-# Convertir claves a string
+# Asegurar que IDPROC es string
 df_proceso["IDPROC"] = df_proceso["IDPROC"].astype(str)
 df_detalle["IDPROC"] = df_detalle["IDPROC"].astype(str)
 
-# Eliminar columna PROCESO de df_detalle si existe
+# Si existiera, quitamos la columna PROCESO de df_detalle
 if "PROCESO" in df_detalle.columns:
     df_detalle = df_detalle.drop(columns=["PROCESO"])
 
-# ------------------------------------------------------------------
-# Merge incluyendo ahora SERVICIO ▶️
-# ------------------------------------------------------------------
+# ——— Aquí estaba el error: no existe SERVICIO en df_proceso ———
+# Conservamos SERVICIO de df_detalle y traemos PROCESO/FECHA/CLIENTE desde df_proceso
 df_movimientos = df_detalle.merge(
-    df_proceso[["IDPROC", "PROCESO", "FECHA", "CLIENTE", "SERVICIO"]],  # ▶️ añadimos SERVICIO
+    df_proceso[["IDPROC", "PROCESO", "FECHA", "CLIENTE"]],
     on="IDPROC",
     how="left"
 )
 
-# ------------------------------------------------------------------
-# Título y subtítulo
-# ------------------------------------------------------------------
 st.title("Demo TrackerCyl")
 st.subheader("CILINDROS NO RETORNADOS")
 
-# ------------------------------------------------------------------
-# Normalización de serie
-# ------------------------------------------------------------------
+# Limpiar y convertir fechas
 df_movimientos["SERIE"] = (
     df_movimientos["SERIE"]
     .astype(str)
     .str.replace(",", "", regex=False)
 )
-
-# ------------------------------------------------------------------
-# Conversión de fecha
-# ------------------------------------------------------------------
 df_movimientos["FECHA"] = pd.to_datetime(
     df_movimientos["FECHA"], format="%d/%m/%Y", errors="coerce"
 )
 
-# ------------------------------------------------------------------
-# Filtro: entregados hace más de 30 días
-# ------------------------------------------------------------------
+# Filtrar entregas >30 días
 fecha_limite = datetime.now() - timedelta(days=30)
 df_entregados = df_movimientos[
     (df_movimientos["PROCESO"].isin(["DESPACHO", "ENTREGA"])) &
     (df_movimientos["FECHA"] < fecha_limite)
 ]
-
-# Último movimiento por serie
 df_entregados_ultimo = (
     df_entregados
-    .sort_values(by=["FECHA"], ascending=False)
+    .sort_values(by="FECHA", ascending=False)
     .drop_duplicates(subset="SERIE", keep="first")
 )
 
-# Últimos retornos (RETIRO o RECEPCION)
+# Últimos retornos
 df_retorno = df_movimientos[df_movimientos["PROCESO"].isin(["RETIRO", "RECEPCION"])]
 df_retorno_ultimo = (
     df_retorno
-    .sort_values(by=["FECHA"], ascending=False)
+    .sort_values(by="FECHA", ascending=False)
     .drop_duplicates(subset="SERIE", keep="first")
 )
 
-# Comparación entre entregas y retornos
+# Detectar cuáles no han retorno posterior a la entrega
 df_retorno_validos = df_retorno_ultimo.merge(
     df_entregados_ultimo[["SERIE", "FECHA"]],
     on="SERIE",
@@ -117,34 +93,30 @@ df_retorno_validos = df_retorno_validos[
     df_retorno_validos["FECHA_retorno"] > df_retorno_validos["FECHA_entrega"]
 ]
 
-# Determinar cilindros no retornados
-cilinds_ent = set(df_entregados_ultimo["SERIE"])
-cilinds_ret = set(df_retorno_validos["SERIE"])
-cilinds_no_ret = cilinds_ent - cilinds_ret
+entregados_set = set(df_entregados_ultimo["SERIE"])
+retornados_set = set(df_retorno_validos["SERIE"])
+no_retorno = entregados_set - retornados_set
+
 df_no_retorno = df_entregados_ultimo[
-    df_entregados_ultimo["SERIE"].isin(cilinds_no_ret)
+    df_entregados_ultimo["SERIE"].isin(no_retorno)
 ]
 
-# ------------------------------------------------------------------
-# Mostrar resultados + descarga incluyendo SERVICIO ▶️
-# ------------------------------------------------------------------
 if not df_no_retorno.empty:
     st.write("Cilindros entregados hace más de 30 días y no retornados:")
 
     df_no_retorno["FECHA"] = df_no_retorno["FECHA"].dt.strftime("%Y-%m-%d")
 
+    # Ahora sí existe SERVICIO en el DataFrame
     st.dataframe(
-        df_no_retorno[
-            ["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE", "SERVICIO"]  # ▶️ SERVICIO en el listado
-        ]
+        df_no_retorno[["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE", "SERVICIO"]]
     )
 
-    def convert_to_excel(dataframe):
-        return dataframe.to_csv(index=False).encode("utf-8")
+    def convert_to_csv(df: pd.DataFrame) -> bytes:
+        return df.to_csv(index=False).encode("utf-8")
 
     st.download_button(
         label="Descargar listado en Excel",
-        data=convert_to_excel(df_no_retorno),
+        data=convert_to_csv(df_no_retorno),
         file_name="Cilindros_No_Retornados.csv",
         mime="text/csv",
     )
