@@ -17,7 +17,7 @@ def load_image(image_name: str) -> Image:
 
 # Configuración de la aplicación
 st.set_page_config(
-    page_title="Demo Tracker Cyl",
+    page_title="FASTRACK",
     page_icon=":dollar:",
     initial_sidebar_state="expanded",
 )
@@ -32,7 +32,7 @@ with col2:
     st.image(load_image("Logo.jpg"), width=150)
 
 # Títulos y subtítulos
-st.write("### SISTEMA TRACKING DE CILINDROS :chart_with_upwards_trend:")
+st.write("### SISTEMA TRACKING DE CILINDROS - FASTRACK :chart_with_upwards_trend:")
 st.write("#### URKINOX RANCAGUA")
 
 st.markdown("---")
@@ -43,13 +43,16 @@ st.sidebar.success("Selecciona un modelo de consulta")
 # Contenido introductorio y descripción de la aplicación
 st.write("")
 st.markdown(
-    """##### Bienvenido al sistema de gestion de cilindros de Carlitos Urquizar
+    """##### Bienvenido al sistema de gestion de cilindros de URKINOX
 
     
-Elije el modelo de conulta que necesitas:
+Elije el modelo de consulta que necesitas:
 
 - **Movimientos por Cilindro**: Te permitirá consultar todos los movimientos asociados a una serie específica.
 - **Cilindros por cliente**: Te permitirá conocer los cilindros en un cliente especifico al momento de ejecutar la consulta.
+- **Rotacion**: Te mostrará el listado de cilindros que no han retornado en 30 dias.
+- **Cilindros por ubicacion**: Te permitirá conocer los cilindros disponibles en local o clientes
+- **Cilindros por fecha**: Te permitirá conocer el detalle de todos los movimientos durante un periodo determinado.
 
 :moneybag::moneybag::moneybag::moneybag::moneybag::moneybag::moneybag::moneybag::moneybag::moneybag::moneybag::moneybag::moneybag::moneybag::moneybag::moneybag::moneybag:
     """
