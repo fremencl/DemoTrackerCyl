@@ -11,7 +11,9 @@ from auth import check_password
 if not check_password():
     st.stop()
 
+# ------------------------------------------------------------------
 # Función para obtener datos desde Google Sheets
+# ------------------------------------------------------------------
 def get_gsheet_data(sheet_name):
     try:
         creds_dict = st.secrets["gcp_service_account"]
@@ -20,8 +22,7 @@ def get_gsheet_data(sheet_name):
             "https://www.googleapis.com/auth/drive"
         ]
         credentials = service_account.Credentials.from_service_account_info(
-            creds_dict,
-            scopes=scopes
+            creds_dict, scopes=scopes
         )
         client = gspread.authorize(credentials)
         sheet = client.open("TRAZABILIDAD").worksheet(sheet_name)
@@ -31,11 +32,15 @@ def get_gsheet_data(sheet_name):
         st.error(f"Error al conectar con Google Sheets: {e}")
         return None
 
-# Cargar los datos desde las hojas
+# ------------------------------------------------------------------
+# Cargar datos desde las hojas
+# ------------------------------------------------------------------
 df_proceso = get_gsheet_data("PROCESO")
 df_detalle = get_gsheet_data("DETALLE")
 
+# ------------------------------------------------------------------
 # Normalización de columnas
+# ------------------------------------------------------------------
 df_proceso.columns = df_proceso.columns.str.strip().str.upper()
 df_detalle.columns = df_detalle.columns.str.strip().str.upper()
 
@@ -47,24 +52,40 @@ df_detalle["IDPROC"] = df_detalle["IDPROC"].astype(str)
 if "PROCESO" in df_detalle.columns:
     df_detalle = df_detalle.drop(columns=["PROCESO"])
 
-# Merge conservando PROCESO desde df_proceso
+# ------------------------------------------------------------------
+# Merge incluyendo ahora SERVICIO ▶️
+# ------------------------------------------------------------------
 df_movimientos = df_detalle.merge(
-    df_proceso[["IDPROC", "PROCESO", "FECHA", "CLIENTE"]],
+    df_proceso[["IDPROC", "PROCESO", "FECHA", "CLIENTE", "SERVICIO"]],  # ▶️ añadimos SERVICIO
     on="IDPROC",
     how="left"
 )
 
+# ------------------------------------------------------------------
 # Título y subtítulo
+# ------------------------------------------------------------------
 st.title("Demo TrackerCyl")
 st.subheader("CILINDROS NO RETORNADOS")
 
+# ------------------------------------------------------------------
 # Normalización de serie
-df_movimientos["SERIE"] = df_movimientos["SERIE"].astype(str).str.replace(",", "", regex=False)
+# ------------------------------------------------------------------
+df_movimientos["SERIE"] = (
+    df_movimientos["SERIE"]
+    .astype(str)
+    .str.replace(",", "", regex=False)
+)
 
+# ------------------------------------------------------------------
 # Conversión de fecha
-df_movimientos["FECHA"] = pd.to_datetime(df_movimientos["FECHA"], format="%d/%m/%Y", errors="coerce")
+# ------------------------------------------------------------------
+df_movimientos["FECHA"] = pd.to_datetime(
+    df_movimientos["FECHA"], format="%d/%m/%Y", errors="coerce"
+)
 
+# ------------------------------------------------------------------
 # Filtro: entregados hace más de 30 días
+# ------------------------------------------------------------------
 fecha_limite = datetime.now() - timedelta(days=30)
 df_entregados = df_movimientos[
     (df_movimientos["PROCESO"].isin(["DESPACHO", "ENTREGA"])) &
@@ -97,18 +118,26 @@ df_retorno_validos = df_retorno_validos[
 ]
 
 # Determinar cilindros no retornados
-cilindros_entregados_validos = set(df_entregados_ultimo["SERIE"])
-cilindros_retorno_validos = set(df_retorno_validos["SERIE"])
-cilindros_no_retorno = cilindros_entregados_validos - cilindros_retorno_validos
-df_no_retorno = df_entregados_ultimo[df_entregados_ultimo["SERIE"].isin(cilindros_no_retorno)]
+cilinds_ent = set(df_entregados_ultimo["SERIE"])
+cilinds_ret = set(df_retorno_validos["SERIE"])
+cilinds_no_ret = cilinds_ent - cilinds_ret
+df_no_retorno = df_entregados_ultimo[
+    df_entregados_ultimo["SERIE"].isin(cilinds_no_ret)
+]
 
-# Mostrar resultados
+# ------------------------------------------------------------------
+# Mostrar resultados + descarga incluyendo SERVICIO ▶️
+# ------------------------------------------------------------------
 if not df_no_retorno.empty:
     st.write("Cilindros entregados hace más de 30 días y no retornados:")
 
     df_no_retorno["FECHA"] = df_no_retorno["FECHA"].dt.strftime("%Y-%m-%d")
 
-    st.dataframe(df_no_retorno[["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE"]])
+    st.dataframe(
+        df_no_retorno[
+            ["SERIE", "IDPROC", "FECHA", "PROCESO", "CLIENTE", "SERVICIO"]  # ▶️ SERVICIO en el listado
+        ]
+    )
 
     def convert_to_excel(dataframe):
         return dataframe.to_csv(index=False).encode("utf-8")
