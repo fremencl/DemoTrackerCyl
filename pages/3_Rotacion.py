@@ -50,7 +50,7 @@ df_movimientos = df_detalle.merge(
     how="left"
 )
 
-st.title("Demo TrackerCyl")
+st.title("FASTRACK")
 st.subheader("CILINDROS NO RETORNADOS")
 
 # Limpiar y convertir fechas
