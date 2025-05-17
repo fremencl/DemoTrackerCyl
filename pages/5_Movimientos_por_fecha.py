@@ -83,7 +83,7 @@ else:
 # ————————————————————————————————
 # 8) UI: selección de rango de fechas
 # ————————————————————————————————
-st.title("Demo TrackerCyl")
+st.title("FASTRACK")
 st.subheader("CONSULTA DE MOVIMIENTOS POR RANGO DE FECHA")
 
 hoy = datetime.now().date()
