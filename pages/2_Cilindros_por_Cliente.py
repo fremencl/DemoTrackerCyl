@@ -49,7 +49,7 @@ if df_detalle is not None:
 # ------------------------------------------------------------------
 # UI
 # ------------------------------------------------------------------
-st.title("Demo TrackerCyl")
+st.title("FASTRACK")
 st.subheader("CONSULTA DE CILINDROS POR CLIENTE")
 
 if df_proceso is not None:
