@@ -58,7 +58,6 @@ if df_proceso is not None:
 
 # ————————————————————————————————
 # 5) Merge para traer SERIE a los procesos
-#    (df_proceso ya contiene SERVICIO)
 # ————————————————————————————————
 if df_proceso is not None and df_detalle is not None:
     df_full = df_proceso.merge(
@@ -94,20 +93,17 @@ if st.button("Buscar"):
             (df_full["FECHA"].dt.date >= fecha_inicio) &
             (df_full["FECHA"].dt.date <= fecha_termino)
         )
-        df_filtrado = df_full.loc[mask].copy()
+        df_filtrado = df_full.loc[mask]
 
         if df_filtrado.empty:
             st.warning("No se encontraron movimientos en ese rango de fechas.")
         else:
-            # ▶️ Formatear FECHA para mostrar solo la parte 'YYYY-MM-DD'
-            df_filtrado["FECHA"] = df_filtrado["FECHA"].dt.strftime("%Y-%m-%d")
-
             st.success(
                 f"Movimientos desde {fecha_inicio.isoformat()} hasta {fecha_termino.isoformat()}:"
             )
             st.dataframe(
                 df_filtrado[
-                    ["FECHA", "IDPROC", "PROCESO", "CLIENTE", "UBICACION", "SERIE", "SERVICIO"]
+                    ["FECHA", "IDPROC", "PROCESO", "CLIENTE", "UBICACION", "SERIE"]
                 ]
             )
 
