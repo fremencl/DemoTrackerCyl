@@ -1,5 +1,3 @@
-# pages/5_Movimientos_por_fecha.py
-
 import streamlit as st
 import gspread
 from google.oauth2 import service_account
@@ -123,7 +121,7 @@ if st.button("Buscar"):
 
             filename = f"movimientos_{start_date.isoformat()}_a_{end_date.isoformat()}.csv"
             st.download_button(
-                label="⬇️ Descargar resultados en CSV",
+                label="⬇️ Descargar resultados",
                 data=convert_to_csv(df_merged),
                 file_name=filename,
                 mime="text/csv",
