@@ -1,3 +1,5 @@
+# pages/5_Movimientos_por_fecha.py
+
 import streamlit as st
 import gspread
 from google.oauth2 import service_account
@@ -17,17 +19,20 @@ if not check_password():
 # ————————————————————————————————
 def get_gsheet_data(sheet_name: str) -> pd.DataFrame | None:
     try:
-        creds_dict = st.secrets["gcp_service_account"]
+        creds = st.secrets["gcp_service_account"]
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive",
         ]
         credentials = service_account.Credentials.from_service_account_info(
-            creds_dict, scopes=scopes
+            creds, scopes=scopes
         )
         client = gspread.authorize(credentials)
         sheet = client.open("TRAZABILIDAD").worksheet(sheet_name)
-        return pd.DataFrame(sheet.get_all_records())
+        df = pd.DataFrame(sheet.get_all_records())
+        # Normalizar nombres de columnas
+        df.columns = df.columns.str.strip().str.upper()
+        return df
     except Exception as e:
         st.error(f"Error al conectar con Google Sheets: {e}")
         return None
@@ -39,16 +44,9 @@ df_proceso = get_gsheet_data("PROCESO")
 df_detalle = get_gsheet_data("DETALLE")
 
 # ————————————————————————————————
-# 4) Normalizar nombres de columnas a mayúsculas y sin espacios
+# 4) Limpiar SERIE y asegurar texto
 # ————————————————————————————————
-for df in (df_proceso, df_detalle):
-    if df is not None:
-        df.columns = df.columns.str.strip().str.upper()
-
-# ————————————————————————————————
-# 5) Limpiar la columna SERIE en df_detalle
-# ————————————————————————————————
-if df_detalle is not None:
+if df_detalle is not None and "SERIE" in df_detalle.columns:
     df_detalle["SERIE"] = (
         df_detalle["SERIE"]
         .astype(str)
@@ -56,15 +54,15 @@ if df_detalle is not None:
     )
 
 # ————————————————————————————————
-# 6) Convertir FECHA a datetime en df_proceso
+# 5) Convertir FECHA a datetime en df_proceso
 # ————————————————————————————————
-if df_proceso is not None:
+if df_proceso is not None and "FECHA" in df_proceso.columns:
     df_proceso["FECHA"] = pd.to_datetime(
         df_proceso["FECHA"], format="%d/%m/%Y", errors="coerce"
     )
 
 # ————————————————————————————————
-# 7) UI: rango de fechas
+# 6) UI: rango de fechas
 # ————————————————————————————————
 st.title("Demo TrackerCyl")
 st.subheader("CONSULTA DE MOVIMIENTOS POR RANGO DE FECHA")
@@ -79,34 +77,34 @@ start_date, end_date = st.date_input(
 )
 
 # ————————————————————————————————
-# 8) Al hacer clic en Buscar
+# 7) Al hacer clic en Buscar
 # ————————————————————————————————
 if st.button("Buscar"):
-    # Verificar que cargaron los datos
+    # Validar que los DataFrames estén cargados
     if df_proceso is None or df_detalle is None:
         st.error("No se pudieron cargar los datos de Google Sheets.")
     # Validar rango
     elif start_date > end_date:
         st.warning("La fecha de inicio no puede ser posterior a la fecha de término.")
     else:
-        # 1) Filtrar procesos por fecha (solo date part)
+        # 1) Filtrar procesos por fecha (parte date)
         mask = (
-            (df_proceso["FECHA"].dt.date >= start_date) &
-            (df_proceso["FECHA"].dt.date <= end_date)
+            (df_proceso["FECHA"].dt.date >= start_date)
+            & (df_proceso["FECHA"].dt.date <= end_date)
         )
         df_proc_filtered = df_proceso.loc[mask]
 
         if df_proc_filtered.empty:
             st.warning("No se encontraron movimientos en ese rango de fechas.")
         else:
-            # 2) Unir cada proceso con todos sus detalles (varias SERIES)
+            # 2) Merge con df_detalle para traer SERIE y SERVICIO (uno a muchos)
             df_merged = df_proc_filtered.merge(
-                df_detalle[["IDPROC", "SERIE"]],
+                df_detalle[["IDPROC", "SERIE", "SERVICIO"]],
                 on="IDPROC",
                 how="left"
             )
 
-            # 3) Convertir FECHA a pure date (sin hora)
+            # 3) Convertir FECHA a date puro
             df_merged["FECHA"] = df_merged["FECHA"].dt.date
 
             # 4) Mostrar resultados
