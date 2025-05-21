@@ -62,7 +62,7 @@ if df_proceso is not None and "FECHA" in df_proceso.columns:
 # ————————————————————————————————
 # 6) UI: rango de fechas
 # ————————————————————————————————
-st.title("Demo TrackerCyl")
+st.title("FASTRACK")
 st.subheader("CONSULTA DE MOVIMIENTOS POR RANGO DE FECHA")
 
 today = datetime.now().date()
