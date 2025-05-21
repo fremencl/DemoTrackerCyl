@@ -1,10 +1,8 @@
-# pages/5_Movimientos_por_fecha.py
-
 import streamlit as st
 import gspread
 from google.oauth2 import service_account
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from auth import check_password
 
@@ -19,15 +17,13 @@ if not check_password():
 # ————————————————————————————————
 def get_gsheet_data(sheet_name: str) -> pd.DataFrame | None:
     try:
-        creds_dict = st.secrets["gcp_service_account"]
+        creds = st.secrets["gcp_service_account"]
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive",
         ]
-        credentials = service_account.Credentials.from_service_account_info(
-            creds_dict, scopes=scopes
-        )
-        client = gspread.authorize(credentials)
+        creds_obj = service_account.Credentials.from_service_account_info(creds, scopes=scopes)
+        client = gspread.authorize(creds_obj)
         sheet = client.open("TRAZABILIDAD").worksheet(sheet_name)
         return pd.DataFrame(sheet.get_all_records())
     except Exception as e:
@@ -41,7 +37,7 @@ df_proceso = get_gsheet_data("PROCESO")
 df_detalle = get_gsheet_data("DETALLE")
 
 # ————————————————————————————————
-# 4) Normalizar nombres de columnas a mayúsculas y sin espacios
+# 4) Normalizar nombres de columnas
 # ————————————————————————————————
 for df in (df_proceso, df_detalle):
     if df is not None:
@@ -66,74 +62,66 @@ if df_proceso is not None:
     )
 
 # ————————————————————————————————
-# 7) Construir df_full incluyendo SERIE y SERVICIO
-#    (SERVICIO viene de df_detalle)
+# 7) UI: rango de fechas
 # ————————————————————————————————
-if df_proceso is not None and df_detalle is not None:
-    # asegurarnos de tomar sólo una fila por IDPROC en df_detalle
-    detalle_unico = df_detalle[["IDPROC", "SERIE", "SERVICIO"]].drop_duplicates("IDPROC")
-    df_full = df_proceso.merge(
-        detalle_unico,
-        on="IDPROC",
-        how="left"
-    )
-else:
-    df_full = pd.DataFrame()
-
-# ————————————————————————————————
-# 8) UI: selección de rango de fechas
-# ————————————————————————————————
-st.title("FASTRACK")
+st.title("Demo TrackerCyl")
 st.subheader("CONSULTA DE MOVIMIENTOS POR RANGO DE FECHA")
 
-hoy = datetime.now().date()
-predeterminado = (hoy - pd.Timedelta(days=7), hoy)
+today = datetime.now().date()
+default_range = (today - timedelta(days=7), today)
 
-fecha_inicio, fecha_termino = st.date_input(
+start_date, end_date = st.date_input(
     "Seleccione rango de fechas",
-    value=predeterminado,
+    value=default_range,
     help="Elija fecha de inicio y fecha de término"
 )
 
 # ————————————————————————————————
-# 9) Al hacer clic en Buscar
+# 8) Al hacer clic en Buscar
 # ————————————————————————————————
 if st.button("Buscar"):
-    if fecha_inicio > fecha_termino:
+    if df_proceso is None or df_detalle is None:
+        st.error("No se pudieron cargar los datos de Google Sheets.")
+    elif start_date > end_date:
         st.warning("La fecha de inicio no puede ser posterior a la fecha de término.")
     else:
-        # Filtrar por fecha (solo parte date, sin hora)
+        # Filtrar procesos en el rango de fechas
         mask = (
-            (df_full["FECHA"].dt.date >= fecha_inicio) &
-            (df_full["FECHA"].dt.date <= fecha_termino)
+            (df_proceso["FECHA"].dt.date >= start_date) &
+            (df_proceso["FECHA"].dt.date <= end_date)
         )
-        df_filtrado = df_full.loc[mask].copy()
+        df_proc_filtered = df_proceso.loc[mask]
 
-        if df_filtrado.empty:
+        if df_proc_filtered.empty:
             st.warning("No se encontraron movimientos en ese rango de fechas.")
         else:
-            # Convertir FECHA a puro date (quita la hora)
-            df_filtrado["FECHA"] = df_filtrado["FECHA"].dt.date
+            # Merge con todos los detalles (uno por cilindro)
+            df_merged = df_proc_filtered.merge(
+                df_detalle[["IDPROC", "SERIE"]],
+                on="IDPROC",
+                how="left"
+            )
+
+            # Convertir FECHA a date puro para mostrar
+            df_merged["FECHA"] = df_merged["FECHA"].dt.date
 
             st.success(
-                f"Movimientos desde {fecha_inicio.isoformat()} hasta {fecha_termino.isoformat()}:"
+                f"Movimientos desde {start_date.isoformat()} hasta {end_date.isoformat()}:"
             )
             st.dataframe(
-                df_filtrado[
+                df_merged[
                     ["FECHA", "IDPROC", "PROCESO", "CLIENTE", "UBICACION", "SERIE", "SERVICIO"]
                 ]
             )
 
-            # Función compacta para CSV
+            # Descargar CSV
             def convert_to_csv(df: pd.DataFrame) -> bytes:
                 return df.to_csv(index=False).encode("utf-8")
 
-            nombre_archivo = (
-                f"movimientos_{fecha_inicio.isoformat()}_a_{fecha_termino.isoformat()}.csv"
-            )
+            filename = f"movimientos_{start_date.isoformat()}_a_{end_date.isoformat()}.csv"
             st.download_button(
                 label="⬇️ Descargar resultados en CSV",
-                data=convert_to_csv(df_filtrado),
-                file_name=nombre_archivo,
+                data=convert_to_csv(df_merged),
+                file_name=filename,
                 mime="text/csv",
             )
