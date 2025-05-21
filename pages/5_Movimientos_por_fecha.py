@@ -17,13 +17,15 @@ if not check_password():
 # ————————————————————————————————
 def get_gsheet_data(sheet_name: str) -> pd.DataFrame | None:
     try:
-        creds = st.secrets["gcp_service_account"]
+        creds_dict = st.secrets["gcp_service_account"]
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive",
         ]
-        creds_obj = service_account.Credentials.from_service_account_info(creds, scopes=scopes)
-        client = gspread.authorize(creds_obj)
+        credentials = service_account.Credentials.from_service_account_info(
+            creds_dict, scopes=scopes
+        )
+        client = gspread.authorize(credentials)
         sheet = client.open("TRAZABILIDAD").worksheet(sheet_name)
         return pd.DataFrame(sheet.get_all_records())
     except Exception as e:
@@ -37,7 +39,7 @@ df_proceso = get_gsheet_data("PROCESO")
 df_detalle = get_gsheet_data("DETALLE")
 
 # ————————————————————————————————
-# 4) Normalizar nombres de columnas
+# 4) Normalizar nombres de columnas a mayúsculas y sin espacios
 # ————————————————————————————————
 for df in (df_proceso, df_detalle):
     if df is not None:
@@ -54,7 +56,7 @@ if df_detalle is not None:
     )
 
 # ————————————————————————————————
-# 6) Convertir FECHA en datetime
+# 6) Convertir FECHA a datetime en df_proceso
 # ————————————————————————————————
 if df_proceso is not None:
     df_proceso["FECHA"] = pd.to_datetime(
@@ -80,12 +82,14 @@ start_date, end_date = st.date_input(
 # 8) Al hacer clic en Buscar
 # ————————————————————————————————
 if st.button("Buscar"):
+    # Verificar que cargaron los datos
     if df_proceso is None or df_detalle is None:
         st.error("No se pudieron cargar los datos de Google Sheets.")
+    # Validar rango
     elif start_date > end_date:
         st.warning("La fecha de inicio no puede ser posterior a la fecha de término.")
     else:
-        # Filtrar procesos en el rango de fechas
+        # 1) Filtrar procesos por fecha (solo date part)
         mask = (
             (df_proceso["FECHA"].dt.date >= start_date) &
             (df_proceso["FECHA"].dt.date <= end_date)
@@ -95,16 +99,17 @@ if st.button("Buscar"):
         if df_proc_filtered.empty:
             st.warning("No se encontraron movimientos en ese rango de fechas.")
         else:
-            # Merge con todos los detalles (uno por cilindro)
+            # 2) Unir cada proceso con todos sus detalles (varias SERIES)
             df_merged = df_proc_filtered.merge(
                 df_detalle[["IDPROC", "SERIE"]],
                 on="IDPROC",
                 how="left"
             )
 
-            # Convertir FECHA a date puro para mostrar
+            # 3) Convertir FECHA a pure date (sin hora)
             df_merged["FECHA"] = df_merged["FECHA"].dt.date
 
+            # 4) Mostrar resultados
             st.success(
                 f"Movimientos desde {start_date.isoformat()} hasta {end_date.isoformat()}:"
             )
@@ -114,7 +119,7 @@ if st.button("Buscar"):
                 ]
             )
 
-            # Descargar CSV
+            # 5) Botón de descarga CSV
             def convert_to_csv(df: pd.DataFrame) -> bytes:
                 return df.to_csv(index=False).encode("utf-8")
 
