@@ -11,9 +11,9 @@ if not check_password():
     st.stop()
 
 # ------------------------------------------------------------------
-# Función para obtener datos desde Google Sheets
+# Función de carga desde Google Sheets
 # ------------------------------------------------------------------
-def get_gsheet_data(sheet_name):
+def get_gsheet_data(sheet_name: str) -> pd.DataFrame | None:
     try:
         creds_dict = st.secrets["gcp_service_account"]
         scopes = [
@@ -25,7 +25,10 @@ def get_gsheet_data(sheet_name):
         )
         client = gspread.authorize(credentials)
         sheet = client.open("TRAZABILIDAD").worksheet(sheet_name)
-        return pd.DataFrame(sheet.get_all_records())
+        df = pd.DataFrame(sheet.get_all_records())
+        # Normalizar nombres de columnas a mayúsculas sin espacios
+        df.columns = df.columns.str.strip().str.upper()
+        return df
     except Exception as e:
         st.error(f"Error al conectar con Google Sheets: {e}")
         return None
@@ -37,9 +40,9 @@ df_proceso = get_gsheet_data("PROCESO")
 df_detalle = get_gsheet_data("DETALLE")
 
 # ------------------------------------------------------------------
-# Normalizar columna SERIE en df_detalle
+# Normalizar columna SERIE y asegurar texto en df_detalle
 # ------------------------------------------------------------------
-if df_detalle is not None:
+if df_detalle is not None and "SERIE" in df_detalle.columns:
     df_detalle["SERIE"] = (
         df_detalle["SERIE"]
         .astype(str)
@@ -64,27 +67,35 @@ else:
 # Botón de búsqueda
 # ------------------------------------------------------------------
 if st.button("Buscar Cilindros del Cliente"):
-    if cliente_seleccionado:
+    if cliente_seleccionado and df_proceso is not None and df_detalle is not None:
+        # 1) IDs de procesos para el cliente
         ids_procesos_cliente = df_proceso.loc[
             df_proceso["CLIENTE"] == cliente_seleccionado, "IDPROC"
         ]
-        df_cilindros_cliente = df_detalle[
-            df_detalle["IDPROC"].isin(ids_procesos_cliente)
+
+        # 2) Para esos procesos, obtengo todos los detalles (incluye SERIE y SERVICIO)
+        df_cilindros_cliente = df_detalle.loc[
+            df_detalle["IDPROC"].isin(ids_procesos_cliente),
+            ["IDPROC", "SERIE", "SERVICIO"]
         ]
 
-        df_procesos_filtrados = df_proceso[
+        # 3) Filtrar procesos por esos IDs y ordenar
+        df_procesos_filtrados = df_proceso.loc[
             df_proceso["IDPROC"].isin(df_cilindros_cliente["IDPROC"])
         ].sort_values(by=["FECHA", "HORA"])
 
+        # 4) Quedarme con el último proceso por IDPROC
         df_ultimos_procesos = df_procesos_filtrados.drop_duplicates(
             subset="IDPROC", keep="last"
         )
 
-        cilindros_en_cliente = df_ultimos_procesos[
+        # 5) Mantener solo procesos de DESPACHO o ENTREGA
+        cilindros_en_cliente = df_ultimos_procesos.loc[
             df_ultimos_procesos["PROCESO"].isin(["DESPACHO", "ENTREGA"])
         ]
 
-        ids_cilindros_en_cliente = df_cilindros_cliente[
+        # 6) Unir con df_cilindros_cliente para traer SERIE y SERVICIO
+        ids_cilindros_en_cliente = df_cilindros_cliente.loc[
             df_cilindros_cliente["IDPROC"].isin(cilindros_en_cliente["IDPROC"])
         ].merge(
             df_ultimos_procesos[["IDPROC", "FECHA"]],
@@ -96,18 +107,16 @@ if st.button("Buscar Cilindros del Cliente"):
         # Mostrar resultados y botón de descarga
         # ----------------------------------------------------------
         if not ids_cilindros_en_cliente.empty:
-            st.write(
-                f"Cilindros actualmente en el cliente: {cliente_seleccionado}"
-            )
+            st.write(f"Cilindros actualmente en el cliente: {cliente_seleccionado}")
+
+            # Incluir SERVICIO al mostrar la tabla
             st.dataframe(
-                ids_cilindros_en_cliente[["SERIE", "IDPROC", "FECHA"]]
+                ids_cilindros_en_cliente[["SERIE", "IDPROC", "FECHA", "SERVICIO"]]
             )
 
-            # ▶️ Función de conversión a CSV+bytes
             def convert_to_csv(df: pd.DataFrame) -> bytes:
                 return df.to_csv(index=False).encode("utf-8")
 
-            # ▶️ Botón de descarga
             st.download_button(
                 label="⬇️ Descargar resultados en CSV",
                 data=convert_to_csv(ids_cilindros_en_cliente),
