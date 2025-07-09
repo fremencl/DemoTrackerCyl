@@ -3,127 +3,108 @@ import gspread
 from google.oauth2 import service_account
 import pandas as pd
 
-# 1) Importamos la función de autenticación
+# ---------------------------------------------------------------
+# Autenticación simple
+# ---------------------------------------------------------------
 from auth import check_password
-
-# Primero verificamos la contraseña.
 if not check_password():
     st.stop()
 
-# ------------------------------------------------------------------
-# Función de carga desde Google Sheets
-# ------------------------------------------------------------------
-def get_gsheet_data(sheet_name: str) -> pd.DataFrame | None:
+# ---------------------------------------------------------------
+# Leer una pestaña de Google Sheets y normalizar columnas
+# ---------------------------------------------------------------
+def get_gsheet_data(sheet: str) -> pd.DataFrame | None:
     try:
-        creds_dict = st.secrets["gcp_service_account"]
+        creds = st.secrets["gcp_service_account"]
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive",
         ]
-        credentials = service_account.Credentials.from_service_account_info(
-            creds_dict, scopes=scopes
+        client = gspread.authorize(
+            service_account.Credentials.from_service_account_info(creds, scopes=scopes)
         )
-        client = gspread.authorize(credentials)
-        sheet = client.open("TRAZABILIDAD").worksheet(sheet_name)
-        df = pd.DataFrame(sheet.get_all_records())
-        # Normalizar nombres de columnas a mayúsculas sin espacios
+        df = pd.DataFrame(client.open("TEST TRAZABILIDAD").worksheet(sheet).get_all_records())
         df.columns = df.columns.str.strip().str.upper()
         return df
     except Exception as e:
         st.error(f"Error al conectar con Google Sheets: {e}")
         return None
 
-# ------------------------------------------------------------------
-# Cargar datos
-# ------------------------------------------------------------------
-df_proceso = get_gsheet_data("PROCESO")
-df_detalle = get_gsheet_data("DETALLE")
+# ---------------------------------------------------------------
+# Cargar datos y limpieza mínima
+# ---------------------------------------------------------------
+df_proc = get_gsheet_data("PROCESO")
+df_det  = get_gsheet_data("DETALLE")
 
-# ------------------------------------------------------------------
-# Normalizar columna SERIE y asegurar texto en df_detalle
-# ------------------------------------------------------------------
-if df_detalle is not None and "SERIE" in df_detalle.columns:
-    df_detalle["SERIE"] = (
-        df_detalle["SERIE"]
-        .astype(str)
-        .str.replace(",", "", regex=False)
-    )
+if df_proc is None or df_det is None:
+    st.stop()
 
-# ------------------------------------------------------------------
-# UI
-# ------------------------------------------------------------------
+# — eliminar columnas duplicadas que puedan venir en DETALLE
+dup_cols = [c for c in ["PROCESO", "FECHA", "HORA", "CLIENTE", "UBICACION"] if c in df_det.columns]
+df_det = df_det.drop(columns=dup_cols, errors="ignore")
+
+# — normalizar campos clave
+df_det["SERIE"]  = df_det["SERIE"].astype(str).str.replace(",", "", regex=False)
+df_proc["IDPROC"] = df_proc["IDPROC"].astype(str)
+df_det["IDPROC"]  = df_det["IDPROC"].astype(str)
+
+# ---------------------------------------------------------------
+# Merge trazabilidad completo (cada fila = un movimiento individual)
+# ---------------------------------------------------------------
+df_mov = df_det.merge(
+    df_proc[["IDPROC", "FECHA", "HORA", "PROCESO", "CLIENTE", "UBICACION"]],
+    on="IDPROC",
+    how="left"
+)
+
+# — FECHA_HORA para ordenar (si HORA viene vacía se rellena 00:00:00)
+df_mov["HORA"] = df_mov["HORA"].fillna("00:00:00").astype(str)
+df_mov["FECHA"] = pd.to_datetime(df_mov["FECHA"], errors="coerce", dayfirst=True)
+df_mov["FECHA_HORA"] = pd.to_datetime(
+    df_mov["FECHA"].dt.strftime("%Y-%m-%d") + " " + df_mov["HORA"],
+    errors="coerce"
+)
+
+# ---------------------------------------------------------------
+# Interfaz
+# ---------------------------------------------------------------
 st.title("FASTRACK")
 st.subheader("CONSULTA DE CILINDROS POR CLIENTE")
 
-if df_proceso is not None:
-    clientes_unicos = df_proceso["CLIENTE"].unique()
-    cliente_seleccionado = st.selectbox(
-        "Seleccione el cliente:", clientes_unicos
+clientes = df_proc["CLIENTE"].dropna().unique()
+cliente_sel = st.selectbox("Seleccione el cliente:", clientes)
+
+# ---------------------------------------------------------------
+# Lógica principal
+# ---------------------------------------------------------------
+if st.button("Buscar cilindros del cliente") and cliente_sel:
+
+    # 1. Último movimiento global de cada cilindro
+    df_ult = (
+        df_mov
+        .sort_values("FECHA_HORA", ascending=False, na_position="last")
+        .drop_duplicates("SERIE", keep="first")
     )
-else:
-    cliente_seleccionado = None
 
-# ------------------------------------------------------------------
-# Botón de búsqueda
-# ------------------------------------------------------------------
-if st.button("Buscar Cilindros del Cliente"):
-    if cliente_seleccionado and df_proceso is not None and df_detalle is not None:
-        # 1) IDs de procesos para el cliente
-        ids_procesos_cliente = df_proceso.loc[
-            df_proceso["CLIENTE"] == cliente_seleccionado, "IDPROC"
-        ]
+    # 2. Cilindros cuyo último proceso es DESPACHO o ENTREGA
+    df_en_cliente = df_ult[df_ult["PROCESO"].isin(["DESPACHO", "ENTREGA"])]
 
-        # 2) Para esos procesos, obtengo todos los detalles (incluye SERIE y SERVICIO)
-        df_cilindros_cliente = df_detalle.loc[
-            df_detalle["IDPROC"].isin(ids_procesos_cliente),
-            ["IDPROC", "SERIE", "SERVICIO"]
-        ]
+    # 3. …y cuyo CLIENTE coincide con el seleccionado
+    df_en_cliente = df_en_cliente[df_en_cliente["CLIENTE"] == cliente_sel]
 
-        # 3) Filtrar procesos por esos IDs y ordenar
-        df_procesos_filtrados = df_proceso.loc[
-            df_proceso["IDPROC"].isin(df_cilindros_cliente["IDPROC"])
-        ].sort_values(by=["FECHA", "HORA"])
+    if not df_en_cliente.empty:
+        st.success(f"Cilindros actualmente en el cliente: {cliente_sel}")
 
-        # 4) Quedarme con el último proceso por IDPROC
-        df_ultimos_procesos = df_procesos_filtrados.drop_duplicates(
-            subset="IDPROC", keep="last"
+        cols_show = ["SERIE", "IDPROC", "FECHA", "HORA", "PROCESO", "SERVICIO"]
+        cols_show = [c for c in cols_show if c in df_en_cliente.columns]
+
+        st.dataframe(df_en_cliente[cols_show])
+
+        st.download_button(
+            "⬇️ Descargar CSV",
+            data=df_en_cliente[cols_show].to_csv(index=False).encode("utf-8"),
+            file_name=f"cilindros_{cliente_sel}.csv",
+            mime="text/csv",
         )
-
-        # 5) Mantener solo procesos de DESPACHO o ENTREGA
-        cilindros_en_cliente = df_ultimos_procesos.loc[
-            df_ultimos_procesos["PROCESO"].isin(["DESPACHO", "ENTREGA"])
-        ]
-
-        # 6) Unir con df_cilindros_cliente para traer SERIE y SERVICIO
-        ids_cilindros_en_cliente = df_cilindros_cliente.loc[
-            df_cilindros_cliente["IDPROC"].isin(cilindros_en_cliente["IDPROC"])
-        ].merge(
-            df_ultimos_procesos[["IDPROC", "FECHA"]],
-            on="IDPROC",
-            how="left",
-        )
-
-        # ----------------------------------------------------------
-        # Mostrar resultados y botón de descarga
-        # ----------------------------------------------------------
-        if not ids_cilindros_en_cliente.empty:
-            st.write(f"Cilindros actualmente en el cliente: {cliente_seleccionado}")
-
-            # Incluir SERVICIO al mostrar la tabla
-            st.dataframe(
-                ids_cilindros_en_cliente[["SERIE", "IDPROC", "FECHA", "SERVICIO"]]
-            )
-
-            def convert_to_csv(df: pd.DataFrame) -> bytes:
-                return df.to_csv(index=False).encode("utf-8")
-
-            st.download_button(
-                label="⬇️ Descargar resultados en CSV",
-                data=convert_to_csv(ids_cilindros_en_cliente),
-                file_name=f"cilindros_{cliente_seleccionado}.csv",
-                mime="text/csv",
-            )
-        else:
-            st.warning("No se encontraron cilindros en el cliente seleccionado.")
     else:
-        st.warning("Por favor, seleccione un cliente.")
+        st.warning("El cliente no tiene cilindros pendientes de devolución.")
