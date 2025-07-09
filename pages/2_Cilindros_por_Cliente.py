@@ -23,7 +23,7 @@ def get_gsheet_data(sheet: str) -> pd.DataFrame | None:
         client = gspread.authorize(
             service_account.Credentials.from_service_account_info(creds, scopes=scopes)
         )
-        df = pd.DataFrame(client.open("TEST TRAZABILIDAD").worksheet(sheet).get_all_records())
+        df = pd.DataFrame(client.open("TRAZABILIDAD").worksheet(sheet).get_all_records())
         df.columns = df.columns.str.strip().str.upper()
         return df
     except Exception as e:
